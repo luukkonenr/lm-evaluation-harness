@@ -4,6 +4,103 @@
 
 ---
 
+# Working with our fork of lm-evaluation-harness
+
+## Overview
+We maintain a fork of the EleutherAI lm-evaluation-harness repository with our own language-specific evaluations and customizations. Our workflow is designed to:
+- Keep a clean mirror of upstream 
+- Track our local changes separately
+- Allow easy updates from upstream
+- Enable clean contributions back upstream when desired
+
+## Branch Structure
+- `upstream-main`: Clean mirror of upstream's main branch
+- `main`: Our primary working branch containing local customizations
+- `feature/*`: Feature branches for new development
+
+## Initial Setup
+```bash
+# Clone our fork
+git clone git@github.com:jonabur/lm-evaluation-harness.git
+cd lm-evaluation-harness
+
+# Add upstream remote
+git remote add upstream https://github.com/EleutherAI/lm-evaluation-harness.git
+
+# Set up branch tracking
+git checkout main  # Our main development branch
+git checkout upstream-main  # Clean mirror of upstream
+```
+
+## Development Workflow
+
+### Creating New Features
+```bash
+# Start from latest main
+git checkout main
+git pull origin main
+
+# Create feature branch
+git checkout -b feature/my-new-feature
+
+# Work, commit changes...
+```
+
+### Merging Features
+```bash
+# Update main with your feature
+git checkout main
+git merge feature/my-new-feature
+git push origin main
+```
+
+## Updating from Upstream
+
+We regularly pull in upstream changes to stay current with the main repository:
+
+```bash
+# Update upstream-main mirror
+git checkout upstream-main
+git fetch upstream
+git reset --hard upstream/main
+git push origin upstream-main --force  # Safe as this is a mirror branch
+
+# Update our main branch
+git checkout main
+git merge upstream-main
+git push origin main
+```
+
+## Contributing Changes Upstream
+
+When we want to contribute changes back to the main repository:
+
+```bash
+# Create clean branch from upstream
+git checkout -b upstream-contribution upstream-main
+
+# Cherry-pick changes to contribute
+git cherry-pick <commit-hash>
+
+# Clean up commits if needed
+git rebase -i upstream-main  # Squash/reword commits as needed
+```
+
+## Best Practices
+- Never work directly on `upstream-main` - it should remain a clean mirror
+- Make all changes in feature branches first
+- Use merge (not rebase) when updating `main` to preserve shared history
+- Keep commits clean and focused when preparing upstream contributions
+- Coordinate with team when pushing to `main`
+
+## Key Points to Remember
+- `upstream-main` is our mirror of upstream's main branch - never commit directly to it
+- All local development starts from our `main` branch
+- Feature branches are used for all new development
+- We merge (not rebase) when updating `main` to preserve shared history
+
+---
+
 *Latest News 📣*
 
 - [2024/09] We are prototyping allowing users of LM Evaluation Harness to create and evaluate on text+image multimodal input, text output tasks, and have just added the `hf-multimodal` and `vllm-vlm` model types and `mmmu` task as a prototype feature. We welcome users to try out this in-progress feature and stress-test it for themselves, and suggest they check out [`lmms-eval`](https://github.com/EvolvingLMMs-Lab/lmms-eval), a wonderful project originally forking off of the lm-evaluation-harness, for a broader range of multimodal tasks, models, and features.
