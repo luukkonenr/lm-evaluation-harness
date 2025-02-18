@@ -156,13 +156,48 @@ if __name__ == "__main__":
         _, _, answer = PROMPT_WORDS[lang]
         a, b, c, d = CHOICES[lang]
 
+        group_dict = {
+            "group": f"{args.prefix}_{lang}",
+            "task": [
+                f"{args.prefix}_{lang}_stem",
+                f"{args.prefix}_{lang}_other",
+                f"{args.prefix}_{lang}_social_sciences",
+                f"{args.prefix}_{lang}_humanities",
+            ],
+            "aggregate_metric_list": [{
+                "metric": "acc",
+                "weight_by_size": True,
+            }],
+        }
+        group_path = args.save_dir + f"_{args.prefix}_{lang}.yaml"
+        with open(group_path, "w", encoding="utf-8") as group_file:
+            group_dict = {
+                "group": f"{args.prefix}_{lang}",
+                "task": [
+                    f"{args.prefix}_{lang}_stem",
+                    f"{args.prefix}_{lang}_other",
+                    f"{args.prefix}_{lang}_social_sciences",
+                    f"{args.prefix}_{lang}_humanities",
+                ],
+                "aggregate_metric_list": [{
+                    "metric": "acc",
+                    "weight_by_size": True,
+                }],
+            }
+            yaml.dump(
+                group_dict,
+                group_file,
+                allow_unicode=True,
+                default_style='"',
+            )
+
         for subj, cat in SUBJECTS.items():
             yaml_dict = {
                 "include": args.base_yaml,
                 "dataset_name": f"{subj}_{lang}",
                 "task": f"{args.prefix}_{lang.lower()}-{subj}",
                 # "task_alias": f"{subj}_{lang.lower()}",
-                "tag": f"{args.prefix}_{cat}",
+                "tag": f"{args.prefix}_{lang}_{cat}",
                 # "group_alias": f"{cat}",
                 "doc_to_choice": f"['{a}', '{b}', '{c}', '{d}']",
                 "doc_to_text": f"{{{{question.strip()}}}}\n{a}. {{{{choices[0]}}}}\n{b}. {{{{choices[1]}}}}\n{c}. {{{{choices[2]}}}}\n{d}. {{{{choices[3]}}}}\n{answer}:",
@@ -177,5 +212,4 @@ if __name__ == "__main__":
                     yaml_file,
                     allow_unicode=True,
                     default_style='"',
-                    sort_keys=False,
                 )

@@ -1,8 +1,8 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "college_chemistry_FI"
-"task": "ogx_mmlux_fi-college_chemistry"
-"tag": "ogx_mmlux_stem"
+"description": "Seuraavassa on monivalintakysymyksiä (vastauksineen) yliopistokemiasta."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nVastaa:"
-"description": "Seuraavassa on monivalintakysymyksiä (vastauksineen) yliopistokemiasta."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_FI_stem"
+"task": "ogx_mmlux_fi-college_chemistry"

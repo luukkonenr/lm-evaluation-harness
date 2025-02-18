@@ -1,8 +1,8 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "moral_disputes_SV"
-"task": "ogx_mmlux_sv-moral_disputes"
-"tag": "ogx_mmlux_humanities"
+"description": "Följande är flervalsfrågor (med svar) om moraliska tvister."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nSvar:"
-"description": "Följande är flervalsfrågor (med svar) om moraliska tvister."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_SV_humanities"
+"task": "ogx_mmlux_sv-moral_disputes"

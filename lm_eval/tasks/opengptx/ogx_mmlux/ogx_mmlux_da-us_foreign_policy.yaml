@@ -1,8 +1,8 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "us_foreign_policy_DA"
-"task": "ogx_mmlux_da-us_foreign_policy"
-"tag": "ogx_mmlux_social_sciences"
+"description": "Følgende er multiple choice-spørgsmål (med svar) om amerikansk udenrigspolitik."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nSvar:"
-"description": "Følgende er multiple choice-spørgsmål (med svar) om amerikansk udenrigspolitik."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_DA_social_sciences"
+"task": "ogx_mmlux_da-us_foreign_policy"

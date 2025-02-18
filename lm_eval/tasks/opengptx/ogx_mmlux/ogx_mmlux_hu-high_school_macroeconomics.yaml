@@ -1,9 +1,9 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "high_school_macroeconomics_HU"
-"task": "ogx_mmlux_hu-high_school_macroeconomics"
-"tag": "ogx_mmlux_social_sciences"
+"description": "A következő feleletválasztós kérdések (válaszokkal) a középiskolai\
+  \ makroökonómiáról szólnak."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nVálasz:"
-"description": "A következő feleletválasztós kérdések (válaszokkal) a középiskolai\
-  \ makroökonómiáról szólnak."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_HU_social_sciences"
+"task": "ogx_mmlux_hu-high_school_macroeconomics"

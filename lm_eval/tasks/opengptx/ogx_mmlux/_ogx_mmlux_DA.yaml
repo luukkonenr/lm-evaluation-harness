@@ -1,0 +1,9 @@
+"aggregate_metric_list":
+- "metric": "acc"
+  "weight_by_size": !!bool "true"
+"group": "ogx_mmlux_DA"
+"task":
+- "ogx_mmlux_DA_stem"
+- "ogx_mmlux_DA_other"
+- "ogx_mmlux_DA_social_sciences"
+- "ogx_mmlux_DA_humanities"

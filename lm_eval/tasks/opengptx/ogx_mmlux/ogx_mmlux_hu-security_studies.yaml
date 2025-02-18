@@ -1,9 +1,9 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "security_studies_HU"
-"task": "ogx_mmlux_hu-security_studies"
-"tag": "ogx_mmlux_social_sciences"
+"description": "Az alábbi feleletválasztós kérdések (válaszokkal) a biztonsági tanulmányokról\
+  \ szólnak."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nVálasz:"
-"description": "Az alábbi feleletválasztós kérdések (válaszokkal) a biztonsági tanulmányokról\
-  \ szólnak."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_HU_social_sciences"
+"task": "ogx_mmlux_hu-security_studies"

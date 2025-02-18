@@ -1,9 +1,9 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "logical_fallacies_ET"
-"task": "ogx_mmlux_et-logical_fallacies"
-"tag": "ogx_mmlux_humanities"
+"description": "Järgnevalt on esitatud valikvastustega küsimused (koos vastustega)\
+  \ loogiliste eksituste kohta."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nVastus:"
-"description": "Järgnevalt on esitatud valikvastustega küsimused (koos vastustega)\
-  \ loogiliste eksituste kohta."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_ET_humanities"
+"task": "ogx_mmlux_et-logical_fallacies"

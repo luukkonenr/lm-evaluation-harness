@@ -1,8 +1,8 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "marketing_SL"
-"task": "ogx_mmlux_sl-marketing"
-"tag": "ogx_mmlux_other"
+"description": "V nadaljevanju so vprašanja (z odgovori) o trženju."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nOdgovor:"
-"description": "V nadaljevanju so vprašanja (z odgovori) o trženju."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_SL_other"
+"task": "ogx_mmlux_sl-marketing"

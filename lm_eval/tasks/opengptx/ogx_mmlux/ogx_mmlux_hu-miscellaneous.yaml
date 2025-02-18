@@ -1,9 +1,9 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "miscellaneous_HU"
-"task": "ogx_mmlux_hu-miscellaneous"
-"tag": "ogx_mmlux_other"
+"description": "A következő feleletválasztós kérdések (válaszokkal) a különféle kérdésekről\
+  \ szólnak."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nVálasz:"
-"description": "A következő feleletválasztós kérdések (válaszokkal) a különféle kérdésekről\
-  \ szólnak."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_HU_other"
+"task": "ogx_mmlux_hu-miscellaneous"

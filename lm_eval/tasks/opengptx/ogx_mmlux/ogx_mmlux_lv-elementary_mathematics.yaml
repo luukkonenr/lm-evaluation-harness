@@ -1,9 +1,9 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "elementary_mathematics_LV"
-"task": "ogx_mmlux_lv-elementary_mathematics"
-"tag": "ogx_mmlux_stem"
+"description": "Tālāk ir jautājumi ar atbilžu variantiem (ar atbildēm) par elementāro\
+  \ matemātiku."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nAtbilde:"
-"description": "Tālāk ir jautājumi ar atbilžu variantiem (ar atbildēm) par elementāro\
-  \ matemātiku."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_LV_stem"
+"task": "ogx_mmlux_lv-elementary_mathematics"

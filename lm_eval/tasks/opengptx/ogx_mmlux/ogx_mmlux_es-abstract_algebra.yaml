@@ -1,9 +1,9 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "abstract_algebra_ES"
-"task": "ogx_mmlux_es-abstract_algebra"
-"tag": "ogx_mmlux_stem"
+"description": "Las siguientes son preguntas de opción múltiple (con respuestas) sobre\
+  \ álgebra abstracta."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nRespuesta:"
-"description": "Las siguientes son preguntas de opción múltiple (con respuestas) sobre\
-  \ álgebra abstracta."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_ES_stem"
+"task": "ogx_mmlux_es-abstract_algebra"

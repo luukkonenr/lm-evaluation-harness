@@ -1,8 +1,8 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "high_school_geography_CS"
-"task": "ogx_mmlux_cs-high_school_geography"
-"tag": "ogx_mmlux_social_sciences"
+"description": "Následují otázky s výběrem odpovědí o středoškolském zeměpisu."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nOdpověď:"
-"description": "Následují otázky s výběrem odpovědí o středoškolském zeměpisu."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_CS_social_sciences"
+"task": "ogx_mmlux_cs-high_school_geography"

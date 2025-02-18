@@ -1,9 +1,9 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "college_physics_ES"
-"task": "ogx_mmlux_es-college_physics"
-"tag": "ogx_mmlux_stem"
+"description": "Las siguientes son preguntas de opción múltiple (con respuestas) sobre\
+  \ física universitaria."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nRespuesta:"
-"description": "Las siguientes son preguntas de opción múltiple (con respuestas) sobre\
-  \ física universitaria."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_ES_stem"
+"task": "ogx_mmlux_es-college_physics"

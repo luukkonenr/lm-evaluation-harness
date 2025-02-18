@@ -1,8 +1,8 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "abstract_algebra_CS"
-"task": "ogx_mmlux_cs-abstract_algebra"
-"tag": "ogx_mmlux_stem"
+"description": "Následují otázky s výběrem odpovědí o abstraktní algebře."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nOdpověď:"
-"description": "Následují otázky s výběrem odpovědí o abstraktní algebře."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_CS_stem"
+"task": "ogx_mmlux_cs-abstract_algebra"

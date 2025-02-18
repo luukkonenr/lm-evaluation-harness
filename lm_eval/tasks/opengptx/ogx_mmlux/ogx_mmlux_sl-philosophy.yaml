@@ -1,8 +1,8 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "philosophy_SL"
-"task": "ogx_mmlux_sl-philosophy"
-"tag": "ogx_mmlux_humanities"
+"description": "V nadaljevanju so vprašanja (z odgovori) o filozofiji."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nOdgovor:"
-"description": "V nadaljevanju so vprašanja (z odgovori) o filozofiji."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_SL_humanities"
+"task": "ogx_mmlux_sl-philosophy"

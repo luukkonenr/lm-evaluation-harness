@@ -1,8 +1,8 @@
-"include": "_default_mmlux_template_yaml"
 "dataset_name": "jurisprudence_FI"
-"task": "ogx_mmlux_fi-jurisprudence"
-"tag": "ogx_mmlux_humanities"
+"description": "Seuraavassa on monivalintakysymyksiä (vastauksineen) oikeustieteestä."
 "doc_to_choice": "['A', 'B', 'C', 'D']"
 "doc_to_text": "{{question.strip()}}\nA. {{choices[0]}}\nB. {{choices[1]}}\nC. {{choices[2]}}\n\
   D. {{choices[3]}}\nVastaa:"
-"description": "Seuraavassa on monivalintakysymyksiä (vastauksineen) oikeustieteestä."
+"include": "_default_mmlux_template_yaml"
+"tag": "ogx_mmlux_FI_humanities"
+"task": "ogx_mmlux_fi-jurisprudence"
