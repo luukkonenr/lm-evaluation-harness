@@ -50,7 +50,8 @@ git checkout -b feature/my-new-feature
 ```bash
 # Update main with your feature
 git checkout main
-git merge feature/my-new-feature
+git merge --squash feature/my-new-feature
+git commit -m "commit message for feature"
 git push origin main
 ```
 
