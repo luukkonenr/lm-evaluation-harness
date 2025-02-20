@@ -1,7 +1,7 @@
-group:
+tag:
   - math_word_problems
   - gsm8kx
-dataset_path: openGPT-X/gsm8kx
+dataset_path: LumiOpen/opengpt-x_gsm8kx
 output_type: generate_until
 training_split: train
 fewshot_split: train
