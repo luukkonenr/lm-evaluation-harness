@@ -1,7 +1,7 @@
-group:
+tag:
   - multiple_choice
   - hellaswagx
-dataset_path: openGPT-X/hellaswagx
+dataset_path: LumiOpen/opengpt-x_hellaswagx
 output_type: multiple_choice
 training_split: train
 validation_split: validation
