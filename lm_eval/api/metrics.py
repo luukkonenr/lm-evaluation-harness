@@ -87,6 +87,14 @@ def bleu(items):
     refs, preds = _sacreformat(refs, preds)
     return sacrebleu.corpus_bleu(preds, refs).score
 
+@register_aggregation("bleu_flores200")
+def bleu_flores200(items):
+    """Like bleus core, but calculated explicitly using the flores200 tokenizer."""
+    refs = list(zip(*items))[0]
+    preds = list(zip(*items))[1]
+    refs, preds = _sacreformat(refs, preds)
+    return sacrebleu.corpus_bleu(preds, refs, tokenize="flores200").score
+
 
 @register_aggregation("chrf")
 def chrf(items):
@@ -326,6 +334,15 @@ def f1_fn(items):  # This is a passthrough function
     aggregation="bleu",
 )
 def bleu_fn(items):  # This is a passthrough function
+    return items
+
+@register_metric(
+    metric="bleu_flores200",
+    higher_is_better=True,
+    output_type="generate_until",
+    aggregation="bleu_flores200",
+)
+def bleu_flores200_fn(items): # This is a passthrough function
     return items
 
 
