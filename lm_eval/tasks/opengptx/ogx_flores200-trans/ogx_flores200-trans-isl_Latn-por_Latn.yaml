@@ -1,0 +1,6 @@
+"include": "_default_template_yaml"
+"task": "ogx_flores200-trans-isl_Latn-por_Latn"
+"dataset_name": "isl_Latn-por_Latn"
+"doc_to_text": "Icelandic phrase: {{sentence_isl_Latn}}\nPortuguese phrase:"
+"doc_to_decontamination_query": "{{sentence_isl_Latn}}"
+"doc_to_target": "{{sentence_por_Latn}}"

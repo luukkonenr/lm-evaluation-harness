@@ -1,0 +1,6 @@
+"include": "_default_template_yaml"
+"task": "ogx_flores200-trans-ron_Latn-nob_Latn"
+"dataset_name": "ron_Latn-nob_Latn"
+"doc_to_text": "Romanian phrase: {{sentence_ron_Latn}}\nNorwegian Bokmål phrase:"
+"doc_to_decontamination_query": "{{sentence_ron_Latn}}"
+"doc_to_target": "{{sentence_nob_Latn}}"
