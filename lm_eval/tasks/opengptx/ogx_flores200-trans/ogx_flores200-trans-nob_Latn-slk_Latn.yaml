@@ -1,0 +1,6 @@
+"include": "_default_template_yaml"
+"task": "ogx_flores200-trans-nob_Latn-slk_Latn"
+"dataset_name": "nob_Latn-slk_Latn"
+"doc_to_text": "Norwegian Bokmål phrase: {{sentence_nob_Latn}}\nSlovak phrase:"
+"doc_to_decontamination_query": "{{sentence_nob_Latn}}"
+"doc_to_target": "{{sentence_slk_Latn}}"
