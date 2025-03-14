@@ -1,4 +1,4 @@
-tag: bigbench_generate_until
+tag: finbench_generate_until
 dataset_path: TurkuNLP/FIN-bench
 output_type: generate_until
 dataset_kwargs:
