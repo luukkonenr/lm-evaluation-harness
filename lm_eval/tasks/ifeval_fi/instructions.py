@@ -23,8 +23,9 @@ import string
 from typing import Dict, Optional, Sequence, Union
 
 import langdetect
+import heliport
 
-from lm_eval.tasks.ifeval import instructions_util
+from lm_eval.tasks.ifeval_fi import instructions_util
 
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,34 @@ _ALL_CAPITAL_WORD_FREQUENCY = 20
 _NUM_WORDS_LOWER_LIMIT = 100
 _NUM_WORDS_UPPER_LIMIT = 500
 
+_LANG_DICT = {
+    'bul': 'bg',  # Bulgarian
+    'ces': 'cs',  # Czech
+    'dan': 'da',  # Danish
+    'deu': 'de',  # German
+    'ell': 'el',  # Greek
+    'eng': 'en',  # English
+    'spa': 'es',  # Spanish
+    'est': 'et',  # Estonian
+    'ekk': 'et',  # Standard Estonian
+    'fin': 'fi',  # Finnish
+    'fra': 'fr',  # French
+    'gle': 'ga',  # Irish
+    'hrv': 'hr',  # Croatian
+    'hun': 'hu',  # Hungarian
+    'ita': 'it',  # Italian
+    'lit': 'lt',  # Lithuanian
+    'lav': 'lv',  # Latvian
+    'lvs': 'lv',  # Standard Latvian
+    'mlt': 'mt',  # Maltese
+    'nld': 'nl',  # Dutch
+    'pol': 'pl',  # Polish
+    'por': 'pt',  # Portuguese
+    'ron': 'ro',  # Romanian
+    'slk': 'sk',  # Slovak
+    'slv': 'sl',  # Slovenian
+    'swe': 'sv'   # Swedish
+}
 
 class Instruction:
     """An instruction template."""
@@ -172,13 +201,17 @@ class ResponseLanguageChecker(Instruction):
         assert isinstance(value, str)
 
         try:
-            return langdetect.detect(value) == self._language
-        except langdetect.LangDetectException as e:
-            # Count as instruction is followed.
-            logging.error(
-                "Unable to detect language for text %s due to %s", value, e
-            )  # refex: disable=pytotw.037
-            return True
+            # return langdetect.detect(value) == self._language
+            lang = heliport.Identifier().identify(value)
+            return _LANG_DICT[lang] == self._language
+        except:
+            logging.error("Error detecting language for text %s", value)
+        # except langdetect.LangDetectException as e:
+        #     # Count as instruction is followed.
+        #     logging.error(
+        #         "Unable to detect language for text %s due to %s", value, e
+        #     )  # refex: disable=pytotw.037
+            # return True
 
 
 class NumberOfSentences(Instruction):
