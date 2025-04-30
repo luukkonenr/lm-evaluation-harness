@@ -1,0 +1,3 @@
+"include": "_default_goldenswagx_template_yaml"
+"dataset_name": "BG"
+"task": "ogx_goldenswagx_bg"
