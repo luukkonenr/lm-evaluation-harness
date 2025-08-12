@@ -19,6 +19,7 @@ from lm_eval.utils import (
 
 
 def try_parse_json(value: str) -> Union[str, dict, None]:
+    print("trying to parse args from ", value)
     if value is None:
         return None
     try:
@@ -305,7 +306,7 @@ def setup_parser() -> argparse.ArgumentParser:
 
 def parse_eval_args(parser: argparse.ArgumentParser) -> argparse.Namespace:
     check_argument_types(parser)
-    return parser.parse_args()
+    return parser.parse_known_args()[0]
 
 
 def cli_evaluate(args: Union[argparse.Namespace, None] = None) -> None:
@@ -313,6 +314,7 @@ def cli_evaluate(args: Union[argparse.Namespace, None] = None) -> None:
         # we allow for args to be passed externally, else we parse them ourselves
         parser = setup_parser()
         args = parse_eval_args(parser)
+        print(args)
 
     if args.wandb_args:
         wandb_args_dict = simple_parse_args_string(args.wandb_args)
