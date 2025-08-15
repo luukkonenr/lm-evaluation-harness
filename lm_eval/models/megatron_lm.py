@@ -74,11 +74,11 @@ class MegatronLM(LM):
         max_gen_toks: int = 256,
         **kwargs,
     ):
-
+        
         super().__init__()
 
         initialize_megatron(args_defaults={'no_load_rng': True, 'no_load_optim': True, 'exit_on_missing_checkpoint': True}, ignore_unknown_args=True)
-        
+        GPUS_PER_NODE = 8 # This can vary between systems. Could be read from environment variables e.g. os.environ["SLURM_GPUS_PER_NODE"]
         model = get_model(model_provider, wrap_with_ddp=False)
         load_checkpoint(model, None, None)
         model = model[0]
@@ -93,14 +93,13 @@ class MegatronLM(LM):
 
 
 
-        # self._world_size = int(self.args.data_parallel_size)
         self._world_size = self.args.world_size 
         model_parallel_size = self.args.tensor_model_parallel_size * self.args.pipeline_model_parallel_size * self.args.context_parallel_size
         self._rank = torch.distributed.get_rank()
         self.data_parallel_group = parallel_state.get_data_parallel_group()
         self.is_model_parallel_src_rank = parallel_state.get_model_parallel_src_rank() == self._rank
-        self._data_parallel_rank = self._rank % model_parallel_size
-        self._device = torch.device(f"cuda:{torch.distributed.get_rank()}")
+        self._data_parallel_rank = self._rank // model_parallel_size
+        self._device = torch.device(f"cuda:{torch.distributed.get_rank() % GPUS_PER_NODE}")
 
         self.tokenizer = get_tokenizer()
 
@@ -264,6 +263,7 @@ class MegatronLM(LM):
 
                 inps.append(self.tok_decode(inp))
 
+
             (
                 batch_output,
                 batch_tokens,
@@ -330,6 +330,7 @@ class MegatronLM(LM):
                     # in the loglikelihood_rolling() function for those.
                     self.cache_hook.add_partial("loglikelihood", cache_key, answer)
 
+                # assert False
                 res.append(answer)
                 pbar.update(1)
 
