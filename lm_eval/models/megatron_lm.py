@@ -1,8 +1,8 @@
-# Implementation from
+# Implementation is based on the one from:
 # https://github.com/yuzc19/lm-evaluation-harness/blob/0c8c0d8165f4caa937c149aa92693e7ac3bfaece/lm_eval/models/megatron_lm.py
 
-
 # Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import importlib
 import pathlib
 from copy import deepcopy
 from typing import List, Literal
-
 import filelock
 import numpy as np
 import torch
@@ -51,7 +50,7 @@ from megatron.training.utils import print_rank_0
 
 from megatron.training.initialize import initialize_megatron
 from megatron.training import get_args, get_tokenizer, get_model
-from megatron.core import mpu, tensor_parallel, dist_checkpointing
+from megatron.core import mpu, tensor_parallel, dist_checkpointing, parallel_state
 from megatron.training.arguments import parse_args, validate_args
 from megatron.training.global_vars import set_global_variables
 from megatron.training.initialize import (
@@ -86,10 +85,22 @@ class MegatronLM(LM):
         model.eval()
 
         self.args = get_args()
+        print(self.args)
         self.model = model
         self._max_length = self.args.max_position_embeddings
         self._batch_size = int(batch_size)
         self._max_gen_toks = max_gen_toks
+
+
+
+        # self._world_size = int(self.args.data_parallel_size)
+        self._world_size = self.args.world_size 
+        model_parallel_size = self.args.tensor_model_parallel_size * self.args.pipeline_model_parallel_size * self.args.context_parallel_size
+        self._rank = torch.distributed.get_rank()
+        self.data_parallel_group = parallel_state.get_data_parallel_group()
+        self.is_model_parallel_src_rank = parallel_state.get_model_parallel_src_rank() == self._rank
+        self._data_parallel_rank = self._rank % model_parallel_size
+        self._device = torch.device(f"cuda:{torch.distributed.get_rank()}")
 
         self.tokenizer = get_tokenizer()
 
@@ -122,11 +133,15 @@ class MegatronLM(LM):
 
     @property
     def device(self):
-        return self.args.device
-
+        return self._device
+    
+    @property
+    def dp_rank(self):
+        return self._data_parallel_rank
     @property
     def rank(self):
         return self._rank
+        # return self.data_parallel_rank
 
     @property
     def world_size(self):
@@ -229,7 +244,7 @@ class MegatronLM(LM):
         chunks = re_ord.get_batched(n=self.batch_size, batch_fn=None)
         pbar = tqdm(
             total=len(requests),
-            disable=(disable_tqdm or (self.rank != 0)),
+            disable=(disable_tqdm or (self._rank != 0)),
             desc="Running loglikelihood requests",
         )
         for chunk in chunks:
@@ -261,7 +276,7 @@ class MegatronLM(LM):
                 tokens_to_generate=0,
                 return_output_log_probs=True,
                 return_topk_logprobs=1,
-                data_parallel=False,
+                data_parallel=True #self.data_parallel_rank == 0,
             )
 
             batch_token_ids = np.asarray(batch_token_ids)

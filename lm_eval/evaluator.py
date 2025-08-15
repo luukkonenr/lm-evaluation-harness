@@ -1,6 +1,7 @@
 import itertools
 import json
 import logging
+import os
 import random
 import time
 from collections import defaultdict
@@ -513,8 +514,8 @@ def evaluate(
             samples=samples.get(task_output.task_name, None)
             if samples is not None
             else samples,
-            rank=lm.rank,
-            world_size=lm.world_size,
+            rank=lm.dp_rank, #
+            world_size=lm.args.data_parallel_size,
             cache_requests=cache_requests,
             rewrite_requests_cache=rewrite_requests_cache,
             system_instruction=system_instruction,
@@ -549,7 +550,7 @@ def evaluate(
                 else task.OUTPUT_TYPE
             )
             # compute number of pseudo-batches to pad with (FSDP/DDP require even batches among ranks)
-            numpad = max(gathered_item) - gathered_item[lm.rank]
+            numpad = max(gathered_item) - gathered_item[lm.dp_rank]
             # todo: may not account for padding in cases like SquadV2 which has multiple req types
             padding_requests[reqtype] += numpad
 
@@ -576,8 +577,10 @@ def evaluate(
         if lm.world_size > 1:
             lm.accelerator.wait_for_everyone()
 
-    RANK = lm.rank
-    WORLD_SIZE = lm.world_size
+
+    DATA_PARALLEL_RANK = lm.dp_rank # Data parallel rank
+    GLOBAL_RANK = lm.rank 
+    WORLD_SIZE = lm.args.data_parallel_size
     ### Postprocess outputs ###
     # TODO: del model here, maybe (idea: allow user to specify device of e.g. reward model separately)
     for task_output, limit in zip(eval_tasks, limits):
@@ -602,7 +605,7 @@ def evaluate(
                 else None
             )
             doc_iterator = task.doc_iterator(
-                rank=RANK,
+                rank=DATA_PARALLEL_RANK,
                 limit=limit,
                 world_size=WORLD_SIZE,
                 samples=indices,
@@ -644,39 +647,46 @@ def evaluate(
                     task_output.logged_samples.append(example)
                 for metric, value in metrics.items():
                     task_output.sample_metrics[(metric, filter_key)].append(value)
-
+    
     if WORLD_SIZE > 1:
         # if multigpu, then gather data across all ranks to rank 0
         # first gather logged samples across all ranks
         for task_output in eval_tasks:
             if log_samples:
                 # for task_name, task_samples in list(samples.items()):
-                full_samples = [None] * WORLD_SIZE if RANK == 0 else None
-                torch.distributed.gather_object(
-                    obj=task_output.logged_samples,
-                    object_gather_list=full_samples,
-                    dst=0,
-                )
+                full_samples = [None] * WORLD_SIZE if GLOBAL_RANK == 0 else None
+                # need to ensure that data parallel group 1 and is  model parallel src rank
+                if lm.is_model_parallel_src_rank:
+                    torch.distributed.gather_object(
+                        obj=task_output.logged_samples,
+                        object_gather_list=full_samples,
+                        group=lm.data_parallel_group,
+                        dst=0,
+                    )
 
-                if RANK == 0:
+                if GLOBAL_RANK == 0:
                     task_output.logged_samples = list(
                         itertools.chain.from_iterable(full_samples)
                     )
 
             # then collect metrics across all ranks
             for metrics in task_output.sample_metrics:
-                metric_list = [None] * WORLD_SIZE if RANK == 0 else None
-                torch.distributed.gather_object(
-                    obj=task_output.sample_metrics[metrics],
-                    object_gather_list=metric_list,
-                    dst=0,
-                )
-                if RANK == 0:
+                metric_list = [None] * WORLD_SIZE if GLOBAL_RANK == 0 else None
+                # gather across all ranks
+                if lm.is_model_parallel_src_rank:
+                    torch.distributed.gather_object(
+                        obj=task_output.sample_metrics[metrics],
+                        object_gather_list=metric_list,
+                        group=lm.data_parallel_group,
+                        dst=0,
+                    )
+                if GLOBAL_RANK == 0:
                     task_output.sample_metrics[metrics] = list(
                         itertools.chain.from_iterable(metric_list)
                     )
-
-    if RANK == 0:
+    # print("Rank:", RANK, "pid:", os.getpid(), "metric_list after gather:", len(task_output.sample_metrics['acc']), task_output.sample_metrics['acc'])
+                    
+    if GLOBAL_RANK == 0:
         ### Aggregate results over all datapoints ###
         # aggregate results ; run bootstrap CIs
         for task_output in eval_tasks:
