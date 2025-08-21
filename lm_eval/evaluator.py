@@ -335,6 +335,7 @@ def simple_evaluate(
             else None,
             fewshot_as_multiturn=fewshot_as_multiturn,
         )
+    # if lm.is_pipeline_first_stage:
 
     results = evaluate(
         lm=lm,
@@ -352,6 +353,7 @@ def simple_evaluate(
         verbosity=verbosity,
         confirm_run_unsafe_code=confirm_run_unsafe_code,
     )
+    
     if verbosity is not None:
         setup_logging(verbosity=verbosity)
 
@@ -469,7 +471,7 @@ def evaluate(
     padding_requests = defaultdict(int)
 
     # get lists of group hierarchy and each type of request
-    eval_tasks = get_task_list(task_dict)
+    eval_tasks = get_task_list(task_dict        )
     if not log_samples:
         if not all(
             "bypass" not in getattr(task_output.task, "_metric_fn_list", {}).keys()
@@ -538,21 +540,23 @@ def evaluate(
             reqtype = instance.request_type
             requests[reqtype].append(instance)
 
-        if lm.world_size > 1:
-            instances_rnk = torch.tensor(len(task._instances), device=lm.device)
-            gathered_item = (
-                lm.accelerator.gather(instances_rnk).cpu().detach().numpy().tolist()
-            )
+        # Balance only across data-parallel replicas, not the whole world.
+        if getattr(lm, "args", None) is not None and lm.args.data_parallel_size > 1:
+            # number of instances on this DP rank
+            local_count = torch.tensor(len(task.instances), device=lm.device)
+            # gather counts across DP group only
+            gathered = [torch.zeros_like(local_count) for _ in range(lm.args.data_parallel_size)]
+            torch.distributed.all_gather(gathered, local_count, group=lm.data_parallel_group)
+            gathered_counts = [int(x.item()) for x in gathered]
             # "multiple_choice" task types dispatch (several) "loglikelihood" request types
             reqtype = (
                 "loglikelihood"
                 if task.OUTPUT_TYPE == "multiple_choice"
                 else task.OUTPUT_TYPE
             )
-            # compute number of pseudo-batches to pad with (FSDP/DDP require even batches among ranks)
-            numpad = max(gathered_item) - gathered_item[lm.dp_rank]
-            # todo: may not account for padding in cases like SquadV2 which has multiple req types
-            padding_requests[reqtype] += numpad
+            # compute padding needed for this DP rank
+            numpad = max(gathered_counts) - int(local_count.item())
+            padding_requests[reqtype] += max(0, numpad)
 
     ### Run LM on inputs, get all outputs ###
     # execute each type of request
@@ -563,127 +567,153 @@ def evaluate(
         for req in reqs:
             cloned_reqs.extend([req] * req.repeats)
 
-        if (lm.world_size > 1) and (padding_requests[reqtype] > 0):
-            for _ in range(padding_requests[reqtype]):
-                cloned_reqs.extend([req] * req.repeats)
+        # DP-only padding for equal fwd passes among DP ranks
+        if getattr(lm, "args", None) is not None and lm.args.data_parallel_size > 1 and (padding_requests[reqtype] > 0):
+            if cloned_reqs:
+                last_req = cloned_reqs[-1]
+                for _ in range(padding_requests[reqtype]):
+                    cloned_reqs.extend([last_req] * last_req.repeats)
 
-        # run requests through model
+        # Invoke LM on all ranks to satisfy Megatron collectives.
         resps = getattr(lm, reqtype)(cloned_reqs)
+        # Only PP first stage returns actual responses.
+        if resps is not None:
+            for x, req in zip(resps, cloned_reqs):
+                req.resps.append(x)
 
-        # put responses from model into a list of length K for each request.
-        for x, req in zip(resps, cloned_reqs):
-            req.resps.append(x)
-
-        if lm.world_size > 1:
+        if getattr(lm, "world_size", 1) > 1:
             lm.accelerator.wait_for_everyone()
-
 
     DATA_PARALLEL_RANK = lm.dp_rank # Data parallel rank
     GLOBAL_RANK = lm.rank 
     WORLD_SIZE = lm.args.data_parallel_size
-    ### Postprocess outputs ###
-    # TODO: del model here, maybe (idea: allow user to specify device of e.g. reward model separately)
-    for task_output, limit in zip(eval_tasks, limits):
-        task = task_output.task
-        task.apply_filters()
+    if getattr(lm, "is_pipeline_first_stage", True):
+        ### Postprocess outputs ###
+        # TODO: del model here, maybe (idea: allow user to specify device of e.g. reward model separately)
+        for task_output, limit in zip(eval_tasks, limits):
+            task = task_output.task
+            task.apply_filters()
 
-        ### Collect values of metrics on all datapoints ###
-        # # unpack results and sort back in order and return control to Task
-        # TODO: make it possible to use a different metric per filter
-        # Pre-process task.instances to group by doc_id
-        instances_by_doc_id = defaultdict(list)
-        for instance in task.instances:
-            instances_by_doc_id[instance.doc_id].append(instance)
-        # Sort instances within each group
-        for instances in instances_by_doc_id.values():
-            instances.sort(key=lambda x: x.idx)
-        # iterate over different filters used
-        for filter_key in task.instances[0].filtered_resps.keys():
-            indices = (
-                samples.get(task_output.task_name, None)
-                if samples is not None
-                else None
-            )
-            doc_iterator = task.doc_iterator(
-                rank=DATA_PARALLEL_RANK,
-                limit=limit,
-                world_size=WORLD_SIZE,
-                samples=indices,
-            )
-            for doc_id, doc in doc_iterator:
-                if indices:
-                    doc_id_true = indices[doc_id]
-                else:
-                    doc_id_true = doc_id
-                requests = instances_by_doc_id[doc_id]
-                metrics = task.process_results(
-                    doc, [req.filtered_resps[filter_key] for req in requests]
+            ### Collect values of metrics on all datapoints ###
+            # # unpack results and sort back in order and return control to Task
+            # TODO: make it possible to use a different metric per filter
+            # Pre-process task.instances to group by doc_id
+            instances_by_doc_id = defaultdict(list)
+            for instance in task.instances:
+                instances_by_doc_id[instance.doc_id].append(instance)
+            # Sort instances within each group
+            for instances in instances_by_doc_id.values():
+                instances.sort(key=lambda x: x.idx)
+            # iterate over different filters used
+            for filter_key in task.instances[0].filtered_resps.keys():
+                indices = (
+                    samples.get(task_output.task_name, None)
+                    if samples is not None
+                    else None
                 )
+                doc_iterator = task.doc_iterator(
+                    rank=DATA_PARALLEL_RANK,
+                    limit=limit,
+                    world_size=WORLD_SIZE,
+                    samples=indices,
+                )
+                for doc_id, doc in doc_iterator:
+                    if indices:
+                        doc_id_true = indices[doc_id]
+                    else:
+                        doc_id_true = doc_id
+                    requests = instances_by_doc_id[doc_id]
+                    metrics = task.process_results(
+                        doc, [req.filtered_resps[filter_key] for req in requests]
+                    )
+                    if log_samples:
+                        target = task.doc_to_target(doc)
+                        example = {
+                            "doc_id": doc_id_true,
+                            "doc": doc,
+                            "target": target,
+                            "arguments": [req.args for req in requests],
+                            "resps": [req.resps for req in requests],
+                            "filtered_resps": [
+                                req.filtered_resps[filter_key] for req in requests
+                            ],
+                            "filter": filter_key,
+                            "metrics": list(metrics.keys()),
+                            "doc_hash": hash_string(
+                                json.dumps(
+                                    requests[0].doc,
+                                    indent=2,
+                                    default=handle_non_serializable,
+                                    ensure_ascii=False,
+                                )
+                            ),
+                            "prompt_hash": hash_string(requests[0].arguments[0]),
+                            "target_hash": hash_string(str(target)),
+                        }
+                        example.update(metrics)
+                        task_output.logged_samples.append(example)
+                    for metric, value in metrics.items():
+                        task_output.sample_metrics[(metric, filter_key)].append(value)
+        
+        if WORLD_SIZE > 1:
+            # Gather logged samples and metrics from all DP groups to global rank 0.
+            # Use world all_gather_object but only contribute from DP-src ranks to avoid duplicates.
+            is_dp_src = getattr(lm, "is_data_parallel_src_rank", False)
+            for task_output in eval_tasks:
                 if log_samples:
-                    target = task.doc_to_target(doc)
-                    example = {
-                        "doc_id": doc_id_true,
-                        "doc": doc,
-                        "target": target,
-                        "arguments": [req.args for req in requests],
-                        "resps": [req.resps for req in requests],
-                        "filtered_resps": [
-                            req.filtered_resps[filter_key] for req in requests
-                        ],
-                        "filter": filter_key,
-                        "metrics": list(metrics.keys()),
-                        "doc_hash": hash_string(
-                            json.dumps(
-                                requests[0].doc,
-                                indent=2,
-                                default=handle_non_serializable,
-                                ensure_ascii=False,
-                            )
-                        ),
-                        "prompt_hash": hash_string(requests[0].arguments[0]),
-                        "target_hash": hash_string(str(target)),
-                    }
-                    example.update(metrics)
-                    task_output.logged_samples.append(example)
-                for metric, value in metrics.items():
-                    task_output.sample_metrics[(metric, filter_key)].append(value)
-    
+                    gathered = [None] * lm.world_size
+                    torch.distributed.all_gather_object(
+                        gathered,
+                        task_output.logged_samples if is_dp_src else [],
+                    )
+                    if GLOBAL_RANK == 0:
+                        merged = []
+                        for part in gathered:
+                            if part:
+                                merged.extend(part)
+                        task_output.logged_samples = merged
+
+                for metrics in list(task_output.sample_metrics.keys()):
+                    gathered = [None] * lm.world_size
+                    torch.distributed.all_gather_object(
+                        gathered,
+                        task_output.sample_metrics[metrics] if is_dp_src else [],
+                    )
+                    if GLOBAL_RANK == 0:
+                        merged = []
+                        for part in gathered:
+                            if part:
+                                merged.extend(part)
+                        task_output.sample_metrics[metrics] = merged
+
+    # Consolidate across all ranks (every rank must participate to avoid deadlocks).
     if WORLD_SIZE > 1:
-        # if multigpu, then gather data across all ranks to rank 0
-        # first gather logged samples across all ranks
+        world = torch.distributed.get_world_size()
         for task_output in eval_tasks:
-            if log_samples:
-                # for task_name, task_samples in list(samples.items()):
-                full_samples = [None] * WORLD_SIZE if GLOBAL_RANK == 0 else None
-                # need to ensure that data parallel group 1 and is  model parallel src rank
-                if lm.is_model_parallel_src_rank:
-                    torch.distributed.gather_object(
-                        obj=task_output.logged_samples,
-                        object_gather_list=full_samples,
-                        group=lm.data_parallel_group,
-                        dst=0,
-                    )
+            # Contribute only from MP-src ranks to avoid duplicates within DP groups.
+            payload = (
+                (task_output.logged_samples if log_samples else [], task_output.sample_metrics)
+                if getattr(lm, "is_model_parallel_src_rank", False)
+                else ([], {})
+            )
+            gathered = [None] * world
+            torch.distributed.all_gather_object(gathered, payload)
 
-                if GLOBAL_RANK == 0:
-                    task_output.logged_samples = list(
-                        itertools.chain.from_iterable(full_samples)
-                    )
+            if GLOBAL_RANK == 0:
+                merged_samples = []
+                merged_metrics = defaultdict(list)
+                for part in gathered:
+                    if part is None:
+                        continue
+                    samples_part, metrics_part = part
+                    if log_samples and samples_part:
+                        merged_samples.extend(samples_part)
+                    for k, v in metrics_part.items():
+                        merged_metrics[k].extend(v)
+                if log_samples:
+                    task_output.logged_samples = merged_samples
+                task_output.sample_metrics = merged_metrics
 
-            # then collect metrics across all ranks
-            for metrics in task_output.sample_metrics:
-                metric_list = [None] * WORLD_SIZE if GLOBAL_RANK == 0 else None
-                # gather across all ranks
-                if lm.is_model_parallel_src_rank:
-                    torch.distributed.gather_object(
-                        obj=task_output.sample_metrics[metrics],
-                        object_gather_list=metric_list,
-                        group=lm.data_parallel_group,
-                        dst=0,
-                    )
-                if GLOBAL_RANK == 0:
-                    task_output.sample_metrics[metrics] = list(
-                        itertools.chain.from_iterable(metric_list)
-                    )
     # print("Rank:", RANK, "pid:", os.getpid(), "metric_list after gather:", len(task_output.sample_metrics['acc']), task_output.sample_metrics['acc'])
                     
     if GLOBAL_RANK == 0:

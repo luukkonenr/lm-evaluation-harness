@@ -26,7 +26,6 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from enum import Enum, auto
-
 from lm_eval.api.instance import Instance
 from lm_eval.api.model import LM
 from lm_eval.api.registry import register_model
@@ -77,12 +76,14 @@ class MegatronLM(LM):
         
         super().__init__()
 
-        initialize_megatron(args_defaults={'no_load_rng': True, 'no_load_optim': True, 'exit_on_missing_checkpoint': True}, ignore_unknown_args=True)
+        initialize_megatron(args_defaults={'no_load_rng': True, 'no_load_optim': True, 'exit_on_missing_checkpoint': False}, ignore_unknown_args=True)
+        # initialize_megatron(args_defaults={'no_load_rng': True, 'no_load_optim': True, 'exit_on_missing_checkpoint': True}, ignore_unknown_args=True)
         GPUS_PER_NODE = 8 # This can vary between systems. Could be read from environment variables e.g. os.environ["SLURM_GPUS_PER_NODE"]
         model = get_model(model_provider, wrap_with_ddp=False)
         load_checkpoint(model, None, None)
         model = model[0]
         model.eval()
+        self.add_special_tokens = False
 
         self.args = get_args()
         print(self.args)
@@ -91,13 +92,15 @@ class MegatronLM(LM):
         self._batch_size = int(batch_size)
         self._max_gen_toks = max_gen_toks
 
-
+        self.is_pipeline_first_stage = mpu.is_pipeline_first_stage()
 
         self._world_size = self.args.world_size 
         model_parallel_size = self.args.tensor_model_parallel_size * self.args.pipeline_model_parallel_size * self.args.context_parallel_size
         self._rank = torch.distributed.get_rank()
         self.data_parallel_group = parallel_state.get_data_parallel_group()
         self.is_model_parallel_src_rank = parallel_state.get_model_parallel_src_rank() == self._rank
+        # DP "source" convenience: use MP-src within each DP replica.
+        self.is_data_parallel_src_rank = self.is_model_parallel_src_rank
         self._data_parallel_rank = self._rank // model_parallel_size
         self._device = torch.device(f"cuda:{torch.distributed.get_rank() % GPUS_PER_NODE}")
 
@@ -140,7 +143,6 @@ class MegatronLM(LM):
     @property
     def rank(self):
         return self._rank
-        # return self.data_parallel_rank
 
     @property
     def world_size(self):
@@ -166,7 +168,7 @@ class MegatronLM(LM):
             return torch.cat(gathered_tensors)
 
     def tok_encode(self, string: str):
-        return self.tokenizer.tokenize(string)
+        return self.tokenizer.tokenize(string, add_special_tokens=False)
 
     def tok_decode(self, tokens):
         return self.tokenizer.detokenize(tokens)
@@ -185,24 +187,27 @@ class MegatronLM(LM):
     def loglikelihood(self, requests):
         new_reqs = []
         for context, continuation in [req.args for req in requests]:
+            # print("Before encoding:", context)
             if context == "":
                 # end of text as context
                 context_enc, continuation_enc = (
                     [self.eot_token_id],
                     self.tok_encode(continuation),
                 )
+                # print("After encoding -- if-branch:", context_enc, continuation_enc)
             else:
                 context_enc, continuation_enc = self._encode_pair(context, continuation)
+                # print("After encoding -- else:", context_enc, continuation_enc)
 
+            # assert False
             new_reqs.append(((context, continuation), context_enc, continuation_enc))
-
         return self._loglikelihood_tokens(new_reqs)
 
     def loglikelihood_rolling(
         self, requests: List[Instance], disable_tqdm: bool = False
     ) -> List[float]:
         loglikelihoods = []
-
+        print("fn: loglikelihood_rolling: requests:", requests)
         for (string,) in tqdm([req.args for req in requests], disable=disable_tqdm):
             rolling_token_windows = list(
                 map(
@@ -233,6 +238,7 @@ class MegatronLM(LM):
         return loglikelihoods
 
     def _loglikelihood_tokens(self, requests, disable_tqdm=False):
+        # Do not early-return; all PP ranks must enter Megatron generate path.
         res = []
 
         def _collate(x):
@@ -250,7 +256,6 @@ class MegatronLM(LM):
             inps = []
             ctxlens = []
             contlens = []
-
             for _, context_enc, continuation_enc in chunk:
                 # Leave one token for generation. Tokens_to_generate = 0 breaks NeMo.
                 inp = (context_enc + continuation_enc)[-(self.max_length) :]
@@ -262,81 +267,69 @@ class MegatronLM(LM):
                 contlens.append(len(continuation_enc))
 
                 inps.append(self.tok_decode(inp))
-
-
-            (
-                batch_output,
-                batch_tokens,
-                batch_logprobs,
-                batch_token_ids,
-                logprobs_topk,
-            ) = generate_and_post_process(
+            outputs = generate_and_post_process(
                 model=self.model,
                 prompts=inps,
                 tokens_to_generate=0,
+                add_BOS=False,
                 return_output_log_probs=True,
                 return_topk_logprobs=1,
-                data_parallel=True #self.data_parallel_rank == 0,
+                data_parallel=True,
             )
-
-            batch_token_ids = np.asarray(batch_token_ids)
-
-            # Compute greedy tokens for entire batch rather than calling it with proper ctxlen for each sample.
-            # Additional tokens for each sample will be trimmed later.
-            min_ctxlen = min(ctxlens)
-
-            # Use min_ctxlen-1 instead of min_ctxlen since full_logprobs are not returns for the first token.
-            batch_greedy_tokens = (
-                logprobs_topk.indices[:, min_ctxlen - 1:, 0]  # Take the first (top) index for each position
-                .cpu()
-                .numpy()
-            )
-
-            for (
-                token_ids,
-                greedy_tokens,
-                logprobs,
-                ctxlen,
-                contlen,
+            # Only PP first stage receives outputs; other stages return None.
+            if self.is_pipeline_first_stage:
                 (
-                    cache_key,
-                    _,
-                    _,
-                ),
-            ) in zip(
-                batch_token_ids,
-                batch_greedy_tokens,
-                batch_logprobs,
-                ctxlens,
-                contlens,
-                chunk,
-            ):
-                # Trim at contlen since shorter contexts in a batch will have more than one token generated.
-                # Use ctxlen-1 instead of ctxlen same as for full_logprob in batch_greedy_tokens calculation
-                logprobs = (logprobs[ctxlen - 1 :])[:contlen]
-                logprob = sum(logprobs)
+                    batch_output,
+                    batch_tokens,
+                    batch_logprobs,
+                    batch_token_ids,
+                    logprobs_topk,
+                ) = outputs
 
-                continuation_tokens = (token_ids[ctxlen:])[:contlen]
-                len_diff = ctxlen - min_ctxlen
-                min_len = min(len(continuation_tokens), len(greedy_tokens[len_diff:]))
-                is_greedy = continuation_tokens[:min_len] == (greedy_tokens[len_diff:])[:min_len]
-                if not isinstance(is_greedy, bool):
-                    is_greedy = is_greedy.all()
-                answer = (logprob, is_greedy)
+                batch_token_ids = np.asarray(batch_token_ids)
+                min_ctxlen = min(ctxlens)
+                batch_greedy_tokens = (
+                    logprobs_topk.indices[:, min_ctxlen - 1:, 0].cpu().numpy()
+                )
 
-                if cache_key is not None:
-                    # special case: loglikelihood_rolling produces a number of loglikelihood requests
-                    # all with cache key None. instead do add_partial on the per-example level
-                    # in the loglikelihood_rolling() function for those.
-                    self.cache_hook.add_partial("loglikelihood", cache_key, answer)
+                # append per-sample answers to res
+                for (
+                    token_ids,
+                    greedy_tokens,
+                    logprobs,
+                    ctxlen,
+                    contlen,
+                    (cache_key, _, _),
+                ) in zip(
+                    np.asarray(batch_token_ids),
+                    logprobs_topk.indices[:, min(ctxlens) - 1:, 0].cpu().numpy(),
+                    batch_logprobs,
+                    ctxlens,
+                    contlens,
+                    chunk,
+                ):
+                    logprobs = (logprobs[ctxlen - 1:])[:contlen]
+                    logprob = sum(logprobs)
 
-                # assert False
-                res.append(answer)
-                pbar.update(1)
+                    continuation_tokens = (token_ids[ctxlen:])[:contlen]
+                    len_diff = ctxlen - min_ctxlen
+                    min_len = min(len(continuation_tokens), len(greedy_tokens[len_diff:]))
+                    is_greedy = continuation_tokens[:min_len] == (greedy_tokens[len_diff:])[:min_len]
+                    if not isinstance(is_greedy, bool):
+                        is_greedy = is_greedy.all()
+                    answer = (logprob, is_greedy)
 
+                    if cache_key is not None:
+                        self.cache_hook.add_partial("loglikelihood", cache_key, answer)
+
+                    res.append(answer)
+
+            pbar.update(len(chunk))
         pbar.close()
-
-        return re_ord.get_original(res)
+        if mpu.is_pipeline_first_stage():
+            return re_ord.get_original(res)
+        else:
+            return None
 
     def generate_until(self, requests):
         assert False, "Not implemented"
