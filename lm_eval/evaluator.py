@@ -656,44 +656,52 @@ def evaluate(
                         task_output.sample_metrics[(metric, filter_key)].append(value)
         
         if WORLD_SIZE > 1:
-            # Gather logged samples and metrics from all DP groups to global rank 0.
-            # Use world all_gather_object but only contribute from DP-src ranks to avoid duplicates.
-            is_dp_src = getattr(lm, "is_data_parallel_src_rank", False)
-            for task_output in eval_tasks:
-                if log_samples:
-                    gathered = [None] * lm.world_size
-                    torch.distributed.all_gather_object(
-                        gathered,
-                        task_output.logged_samples if is_dp_src else [],
-                    )
-                    if GLOBAL_RANK == 0:
-                        merged = []
-                        for part in gathered:
-                            if part:
-                                merged.extend(part)
-                        task_output.logged_samples = merged
+            # Do not merge within DP groups; keep per-rank shards intact.
+            # Only synchronize to ensure all DP ranks have finished postprocessing.
+            if getattr(lm, "data_parallel_group", None) is not None:
+                torch.distributed.barrier(group=lm.data_parallel_group)
+            # is_dp_src = getattr(lm, "is_data_parallel_src_rank", False)
+            # dp_world = lm.args.data_parallel_size
+            # for task_output in eval_tasks:
+            #     if log_samples:
+            #         dp_gathered = [None] * dp_world
+            #         torch.distributed.all_gather_object(
+            #             dp_gathered,
+            #             task_output.logged_samples if is_dp_src else [],
+            #             group=lm.data_parallel_group,
+            #         )
+            #         if is_dp_src:
+            #             merged = []
+            #             for part in dp_gathered:
+            #                 if part:
+            #                     merged.extend(part)
+            #             task_output.logged_samples = merged
 
-                for metrics in list(task_output.sample_metrics.keys()):
-                    gathered = [None] * lm.world_size
-                    torch.distributed.all_gather_object(
-                        gathered,
-                        task_output.sample_metrics[metrics] if is_dp_src else [],
-                    )
-                    if GLOBAL_RANK == 0:
-                        merged = []
-                        for part in gathered:
-                            if part:
-                                merged.extend(part)
-                        task_output.sample_metrics[metrics] = merged
+            #     for metrics in list(task_output.sample_metrics.keys()):
+            #         dp_gathered = [None] * dp_world
+            #         torch.distributed.all_gather_object(
+            #             dp_gathered,
+            #             task_output.sample_metrics[metrics] if is_dp_src else [],
+            #             group=lm.data_parallel_group,
+            #         )
+            #         if is_dp_src:
+            #             merged = []
+            #             for part in dp_gathered:
+            #                 if part:
+            #                     merged.extend(part)
+            #             task_output.sample_metrics[metrics] = merged
 
     # Consolidate across all ranks (every rank must participate to avoid deadlocks).
     if WORLD_SIZE > 1:
         world = torch.distributed.get_world_size()
+        is_dp_src = getattr(lm, "is_data_parallel_src_rank", False)
+        is_mp_src = getattr(lm, "is_model_parallel_src_rank", False)
+        contribute = is_dp_src and is_mp_src
         for task_output in eval_tasks:
-            # Contribute only from MP-src ranks to avoid duplicates within DP groups.
+            # Only MP-src ranks contribute data, others send empty.
             payload = (
                 (task_output.logged_samples if log_samples else [], task_output.sample_metrics)
-                if getattr(lm, "is_model_parallel_src_rank", False)
+                if contribute
                 else ([], {})
             )
             gathered = [None] * world
@@ -714,8 +722,6 @@ def evaluate(
                     task_output.logged_samples = merged_samples
                 task_output.sample_metrics = merged_metrics
 
-    # print("Rank:", RANK, "pid:", os.getpid(), "metric_list after gather:", len(task_output.sample_metrics['acc']), task_output.sample_metrics['acc'])
-                    
     if GLOBAL_RANK == 0:
         ### Aggregate results over all datapoints ###
         # aggregate results ; run bootstrap CIs
