@@ -187,19 +187,14 @@ class MegatronLM(LM):
     def loglikelihood(self, requests):
         new_reqs = []
         for context, continuation in [req.args for req in requests]:
-            # print("Before encoding:", context)
             if context == "":
                 # end of text as context
                 context_enc, continuation_enc = (
                     [self.eot_token_id],
                     self.tok_encode(continuation),
                 )
-                # print("After encoding -- if-branch:", context_enc, continuation_enc)
             else:
                 context_enc, continuation_enc = self._encode_pair(context, continuation)
-                # print("After encoding -- else:", context_enc, continuation_enc)
-
-            # assert False
             new_reqs.append(((context, continuation), context_enc, continuation_enc))
         return self._loglikelihood_tokens(new_reqs)
 
@@ -207,7 +202,6 @@ class MegatronLM(LM):
         self, requests: List[Instance], disable_tqdm: bool = False
     ) -> List[float]:
         loglikelihoods = []
-        print("fn: loglikelihood_rolling: requests:", requests)
         for (string,) in tqdm([req.args for req in requests], disable=disable_tqdm):
             rolling_token_windows = list(
                 map(
