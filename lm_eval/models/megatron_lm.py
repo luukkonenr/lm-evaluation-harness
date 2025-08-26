@@ -16,16 +16,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import contextlib
-import importlib
-import pathlib
-from copy import deepcopy
-from typing import List, Literal
-import filelock
+from typing import List #, Literal
 import numpy as np
 import torch
 from tqdm import tqdm
-from enum import Enum, auto
 from lm_eval.api.instance import Instance
 from lm_eval.api.model import LM
 from lm_eval.api.registry import register_model
@@ -36,31 +30,11 @@ from lm_eval.utils import (
     simple_parse_args_string,
 )
 
-import os
-import torch
-import torch.nn.functional as F
-from megatron.core.transformer.transformer_config import TransformerConfig
-from megatron.core.models.gpt.gpt_model import GPTModel
-from megatron.core.models.gpt.gpt_layer_specs import (
-    get_gpt_layer_with_transformer_engine_spec,
-)
-from megatron.training.checkpointing import get_rng_state, load_checkpoint, _load_base_checkpoint
-from megatron.training.utils import print_rank_0
+from megatron.training.checkpointing import load_checkpoint
 
 from megatron.training.initialize import initialize_megatron
 from megatron.training import get_args, get_tokenizer, get_model
-from megatron.core import mpu, tensor_parallel, dist_checkpointing, parallel_state
-from megatron.training.arguments import parse_args, validate_args
-from megatron.training.global_vars import set_global_variables
-from megatron.training.initialize import (
-    setup_logging,
-    _set_random_seed,
-    _initialize_distributed,
-    _init_autoresume,
-    _initialize_tp_communicators,
-    _compile_dependencies,
-)
-from megatron.training.arguments import core_transformer_config_from_args, get_patch_args
+from megatron.core import mpu, parallel_state
 from megatron.inference.text_generation.api import generate_and_post_process
 from gpt_model_provider_for_inference import model_provider
 
@@ -77,7 +51,6 @@ class MegatronLM(LM):
         super().__init__()
 
         initialize_megatron(args_defaults={'no_load_rng': True, 'no_load_optim': True, 'exit_on_missing_checkpoint': False}, ignore_unknown_args=True)
-        # initialize_megatron(args_defaults={'no_load_rng': True, 'no_load_optim': True, 'exit_on_missing_checkpoint': True}, ignore_unknown_args=True)
         GPUS_PER_NODE = 8 # This can vary between systems. Could be read from environment variables e.g. os.environ["SLURM_GPUS_PER_NODE"]
         model = get_model(model_provider, wrap_with_ddp=False)
         load_checkpoint(model, None, None)
@@ -105,6 +78,7 @@ class MegatronLM(LM):
         self._device = torch.device(f"cuda:{torch.distributed.get_rank() % GPUS_PER_NODE}")
 
         self.tokenizer = get_tokenizer()
+
 
     @classmethod
     def create_from_arg_string(cls, arg_string, additional_config=None):
@@ -168,10 +142,12 @@ class MegatronLM(LM):
             return torch.cat(gathered_tensors)
 
     def tok_encode(self, string: str):
-        return self.tokenizer.tokenize(string, add_special_tokens=False)
+        # bypass tokenize() from Megatron-wrapper as it doesn't forward add_special_tokens=False correctly to HF tokenizer
+        return self.tokenizer._tokenizer(string, add_special_tokens=False).input_ids
 
     def tok_decode(self, tokens):
-        return self.tokenizer.detokenize(tokens)
+        return self.tokenizer._tokenizer.decode(tokens)
+        # return self.tokenizer.decode(tokens)
 
     def _encode_pair(self, context, continuation):
         n_spaces = len(context) - len(context.rstrip())
